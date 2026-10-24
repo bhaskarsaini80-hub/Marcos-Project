@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>e-Kuatia SIFEN XML to Clean PDF Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    @media print {
+      body { background: #fff !important; }
+      .no-print { display: none !important; }
+      #previewWrapper { padding: 0 !important; overflow: visible !important; }
+      #kudeSheet { box-shadow: none !important; border: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+    }
+    .kude-table th { background: #0f172a; color: #fff; font-size: 10px; text-transform: uppercase; padding: 7px 6px; border: 1px solid #0f172a; }
+    .kude-table td { font-size: 10.5px; padding: 7px 6px; border: 1px solid #cbd5e1; color: #0f172a; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Top Header -->
+  <header class="no-print bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow">PDF</div>
+      <div>
+        <h1 class="text-base font-bold text-white leading-tight">e-Kuatia SIFEN XML → Clean PDF Studio</h1>
+        <p class="text-xs text-slate-400">100% Client-Side Instant XML to PDF Converter (No Server Required)</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="topFileBadge" class="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-mono">No XML Loaded</span>
+      <button onclick="downloadPdf()" id="topConvertBtn" disabled
+        class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow transition cursor-pointer">
+        ⬇ Download PDF
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace -->
+  <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+
+    <!-- Left Panel -->
+    <aside class="no-print lg:col-span-4 bg-slate-900/90 border-r border-slate-800 p-5 space-y-5 overflow-y-auto">
+      <div class="bg-slate-950 border border-emerald-500/30 rounded-xl p-4 space-y-3.5 shadow-lg">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">XML File Select Karein</span>
+          <span class="text-[11px] bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/20">Instant</span>
+        </div>
+
+        <label for="xmlFileInput"
+          class="block border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl p-4 text-center cursor-pointer transition bg-slate-900/60">
+          <div class="text-emerald-400 text-sm font-semibold">Click karein ya .xml file yahan drop karein</div>
+          <div id="selectedFileName" class="text-xs text-slate-400 mt-1 font-mono truncate">Koi file select nahi hai</div>
+          <input id="xmlFileInput" type="file" accept=".xml,text/xml,application/xml" class="hidden" />
+        </label>
+
+        <button onclick="loadSampleXml()"
+          class="w-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white py-2.5 rounded-lg text-xs transition cursor-pointer font-medium">
+          Load Sample SIFEN XML (Test)
+        </button>
+      </div>
+
+      <div id="statusBox" class="hidden rounded-xl p-3.5 text-xs border leading-relaxed"></div>
+    </aside>
+
+    <!-- Right Preview Panel -->
+    <main id="previewWrapper" class="lg:col-span-8 bg-slate-950 p-6 overflow-y-auto flex flex-col items-center">
+      <div id="emptyState" class="my-auto text-center max-w-md p-8 border border-slate-800 rounded-2xl bg-slate-900/50">
+        <div class="w-14 h-14 rounded-2xl bg-slate-800 text-blue-400 flex items-center justify-center mx-auto mb-4 text-xl font-bold">XML</div>
+        <h2 class="text-base font-bold text-white">Invoice Preview Yahan Dikhega</h2>
+        <p class="text-xs text-slate-400 mt-2 leading-relaxed">Left side se apni .xml file select karein ya Sample XML load karein. Turant clean Invoice preview aur PDF download ka option mil jayega.</p>
+      </div>
+
+      <!-- KuDE Sheet -->
+      <div id="kudeSheet" class="hidden w-full max-w-[210mm] bg-white text-slate-900 rounded-lg shadow-2xl p-7 space-y-3.5 border border-slate-300">
+        <div class="flex justify-between border-2 border-slate-800 rounded-lg p-3.5">
+          <div class="w-[58%] pr-3 space-y-1">
+            <div id="p_emi_name" class="text-base font-extrabold text-slate-900 uppercase">—</div>
+            <div class="text-xs text-slate-700"><strong>Actividad:</strong> <span id="p_emi_act">—</span></div>
+            <div class="text-xs text-slate-700"><strong>Dirección:</strong> <span id="p_emi_dir">—</span></div>
+            <div class="text-xs text-slate-700"><strong>Teléfono:</strong> <span id="p_emi_tel">—</span> | <strong>Email:</strong> <span id="p_emi_email">—</span></div>
+          </div>
+          <div class="w-[40%] border-l-2 border-slate-300 pl-4 text-right space-y-1">
+            <div id="p_doc_type" class="inline-block bg-slate-900 text-white font-bold text-xs px-3 py-1 rounded uppercase">FACTURA ELECTRÓNICA</div>
+            <div class="text-xs text-slate-800"><strong>RUC:</strong> <span id="p_emi_ruc">—</span></div>
+            <div class="text-xs text-slate-800"><strong>Timbrado N°:</strong> <span id="p_timbrado">—</span></div>
+            <div class="text-xs text-slate-800"><strong>Inicio Vigencia:</strong> <span id="p_fe_ini_t">—</span></div>
+            <div class="text-sm font-extrabold text-blue-700 pt-0.5">N° <span id="p_invoice_no">—</span></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="border border-slate-300 rounded-lg p-3 bg-slate-50 space-y-1">
+            <div class="text-[10px] font-bold uppercase text-slate-500 border-b border-slate-200 pb-1 mb-1">Datos del Receptor (Cliente)</div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">Nombre / Razón:</strong> <span id="p_rec_name" class="font-bold text-slate-900">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">RUC / Doc. ID:</strong> <span id="p_rec_doc">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">Dirección:</strong> <span id="p_rec_dir">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">Tel / Email:</strong> <span id="p_rec_contact">—</span></div>
+          </div>
+          <div class="border border-slate-300 rounded-lg p-3 bg-slate-50 space-y-1">
+            <div class="text-[10px] font-bold uppercase text-slate-500 border-b border-slate-200 pb-1 mb-1">Condiciones de la Operación</div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Fecha de Emisión:</strong> <span id="p_fe_emi">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Condición Venta:</strong> <span id="p_cond_ope">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Moneda:</strong> <span id="p_currency">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Tipo Transacción:</strong> <span id="p_tip_tra">—</span></div>
+          </div>
+        </div>
+
+        <table class="w-full border-collapse kude-table">
+          <thead>
+            <tr>
+              <th class="text-left" style="width:8%">Cód.</th>
+              <th class="text-left" style="width:34%">Descripción Producto / Servicio</th>
+              <th class="text-left" style="width:7%">Unid.</th>
+              <th class="text-right" style="width:8%">Cant.</th>
+              <th class="text-right" style="width:12%">Precio Unit.</th>
+              <th class="text-right" style="width:9%">Desc.</th>
+              <th class="text-right" style="width:10%">Exentas</th>
+              <th class="text-right" style="width:12%">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody id="p_items_body"></tbody>
+        </table>
+
+        <div class="border-2 border-slate-800 rounded-lg overflow-hidden">
+          <div class="flex justify-between px-3.5 py-2 border-b border-slate-200 text-xs bg-slate-50">
+            <span><strong>Subtotales:</strong> Exentas: <span id="p_sub_exe">0</span> | Gravadas 5%: <span id="p_sub_5">0</span> | Gravadas 10%: <span id="p_sub_10">0</span></span>
+            <span><strong>Total Descuento:</strong> <span id="p_tot_desc">0</span></span>
+          </div>
+          <div class="flex justify-between px-3.5 py-2 border-b border-slate-200 text-xs bg-white">
+            <span><strong>Liquidación del IVA:</strong> (5%): <span id="p_iva_5">0</span> | (10%): <span id="p_iva_10">0</span> | <strong>Total IVA: <span id="p_tot_iva">0</span></strong></span>
+          </div>
+          <div class="flex justify-between px-4 py-2.5 bg-slate-900 text-white text-sm font-extrabold">
+            <span>TOTAL GENERAL DE LA OPERACIÓN (<span id="p_curr_label">PYG</span>)</span>
+            <span id="p_tot_gral">0 PYG</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between border border-slate-300 rounded-lg p-3.5 bg-slate-50">
+          <div class="flex-1 pr-4 space-y-1">
+            <div class="text-xs font-bold text-slate-800">KuDE - Representación Gráfica de Documento Electrónico (SIFEN / DNIT)</div>
+            <div class="text-[11px] text-slate-600">Consulte la validez de esta Factura Electrónica con el número de CDC en: <strong>https://ekuatia.set.gov.py/consultas/</strong></div>
+            <div class="text-[11px] font-bold text-slate-700 pt-1">CDC (Código de Control - 44 dígitos):</div>
+            <div id="p_cdc_formatted" class="font-mono text-xs font-bold tracking-wider bg-white border border-slate-300 px-3 py-1.5 rounded inline-block text-slate-900">—</div>
+          </div>
+          <div id="p_qr_box" class="w-24 h-24 bg-white border border-slate-300 rounded p-1.5 flex items-center justify-center shrink-0"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let currentFileName = 'invoice.xml';
+
+    function showStatus(msg, type = 'info') {
+      const box = document.getElementById('statusBox');
+      box.className = 'rounded-xl p-3.5 text-xs border leading-relaxed ';
+      box.className += type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+      box.textContent = msg;
+      box.classList.remove('hidden');
+    }
+
+    function getTagText(parent, tagName, def = '') {
+      if (!parent) return def;
+      const els = parent.getElementsByTagName('*');
+      for (let i = 0; i < els.length; i++) {
+        const local = els[i].localName || els[i].tagName.split(':').pop();
+        if (local === tagName && els[i].textContent && els[i].textContent.trim() !== '') {
+          return els[i].textContent.trim();
+        }
+      }
+      return def;
+    }
+
+    function getBlock(root, tagName) {
+      const els = root.getElementsByTagName('*');
+      for (let i = 0; i < els.length; i++) {
+        const local = els[i].localName || els[i].tagName.split(':').pop();
+        if (local === tagName) return els[i];
+      }
+      return null;
+    }
+
+    function fmtNum(val, curr = 'PYG') {
+      if (val === null || val === undefined || String(val).trim() === '') return '0';
+      const n = parseFloat(String(val).trim());
+      if (isNaN(n)) return String(val);
+      if (curr === 'PYG' || Number.isInteger(n)) {
+        return Math.round(n).toLocaleString('es-PY');
+      }
+      return n.toLocaleString('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderXmlPreview(xmlString, fileName = 'document.xml') {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+      if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+        showStatus('Invalid XML file! Kripya sahi SIFEN XML file select karein.', 'error');
+        return false;
+      }
+
+      currentFileName = fileName;
+      const deNode = getBlock(xmlDoc, 'DE');
+      const cdc = deNode ? (deNode.getAttribute('Id') || '') : '';
+
+      const gTimb = getBlock(xmlDoc, 'gTimb');
+      const gDatGralOpe = getBlock(xmlDoc, 'gDatGralOpe');
+      const gOpeCom = getBlock(xmlDoc, 'gOpeCom');
+      const gEmis = getBlock(xmlDoc, 'gEmis');
+      const gDatRec = getBlock(xmlDoc, 'gDatRec');
+      const gCamCond = getBlock(xmlDoc, 'gCamCond');
+      const gTotSub = getBlock(xmlDoc, 'gTotSub');
+
+      const curr = getTagText(gOpeCom, 'cMoneOpe', 'PYG');
+      const currName = getTagText(gOpeCom, 'dDesMoneOpe', '');
+      const est = getTagText(gTimb, 'dEst', '001');
+      const pun = getTagText(gTimb, 'dPunExp', '001');
+      const numDoc = getTagText(gTimb, 'dNumDoc', '');
+
+      document.getElementById('p_emi_name').textContent = getTagText(gEmis, 'dNomEmi', '—');
+      document.getElementById('p_emi_act').textContent = getTagText(gEmis, 'dDesActEco', '—');
+      const dirEmi = getTagText(gEmis, 'dDirEmi', '—');
+      const ciuEmi = getTagText(gEmis, 'dDesCiuEmi', '');
+      document.getElementById('p_emi_dir').textContent = ciuEmi ? `${dirEmi} - ${ciuEmi}` : dirEmi;
+      document.getElementById('p_emi_tel').textContent = getTagText(gEmis, 'dTelEmi', '—');
+      document.getElementById('p_emi_email').textContent = getTagText(gEmis, 'dEmailE', '—');
+
+      document.getElementById('p_doc_type').textContent = getTagText(gTimb, 'dDesTiDE', 'Factura electrónica');
+      const rucEm = getTagText(gEmis, 'dRucEm', '');
+      const dvEmi = getTagText(gEmis, 'dDVEmi', '');
+      document.getElementById('p_emi_ruc').textContent = rucEm ? `${rucEm}-${dvEmi}` : '—';
+      document.getElementById('p_timbrado').textContent = getTagText(gTimb, 'dNumTim', '—');
+      document.getElementById('p_fe_ini_t').textContent = getTagText(gTimb, 'dFeIniT', '—');
+      document.getElementById('p_invoice_no').textContent = numDoc ? `${est}-${pun}-${numDoc}` : '—';
+
+      document.getElementById('p_rec_name').textContent = getTagText(gDatRec, 'dNomRec', 'Sin Nombre');
+      const rucRec = getTagText(gDatRec, 'dRucRec', '');
+      const dvRec = getTagText(gDatRec, 'dDVRec', '');
+      document.getElementById('p_rec_doc').textContent = rucRec ? `${rucRec}-${dvRec}` : getTagText(gDatRec, 'dNumIDRec', '—');
+      document.getElementById('p_rec_dir').textContent = getTagText(gDatRec, 'dDirRec', '—');
+      const telRec = getTagText(gDatRec, 'dTelRec', '—');
+      const emailRec = getTagText(gDatRec, 'dEmailRec', '');
+      document.getElementById('p_rec_contact').textContent = emailRec ? `${telRec} | ${emailRec}` : telRec;
+
+      document.getElementById('p_fe_emi').textContent = getTagText(gDatGralOpe, 'dFeEmiDE', '—').replace('T', ' ');
+      document.getElementById('p_cond_ope').textContent = `${getTagText(gCamCond, 'dDCondOpe', 'Contado')} (${getTagText(gCamCond, 'dDesTiPag', 'Efectivo')})`;
+      document.getElementById('p_currency').textContent = currName ? `${curr} - ${currName}` : curr;
+      document.getElementById('p_tip_tra').textContent = getTagText(gOpeCom, 'dDesTipTra', '—');
+
+      const tbody = document.getElementById('p_items_body');
+      tbody.innerHTML = '';
+      const allEls = xmlDoc.getElementsByTagName('*');
+      const itemNodes = [];
+      for (let i = 0; i < allEls.length; i++) {
+        const local = allEls[i].localName || allEls[i].tagName.split(':').pop();
+        if (local === 'gCamItem') itemNodes.push(allEls[i]);
+      }
+
+      let fallbackTotal = '0';
+      itemNodes.forEach((node, idx) => {
+        const code = getTagText(node, 'dCodInt', String(idx + 1));
+        const desc = getTagText(node, 'dDesProSer', '—');
+        const unit = getTagText(node, 'dDesUniMed', 'UNI');
+        const qty = fmtNum(getTagText(node, 'dCantProSer', '1'), 'DEC');
+        const price = fmtNum(getTagText(node, 'dPUniProSer', '0'), curr);
+        const descItem = fmtNum(getTagText(node, 'dDescItem', '0'), curr);
+        const totOpe = getTagText(node, 'dTotOpeItem') || getTagText(node, 'dTotBruOpeItem', '0');
+        fallbackTotal = totOpe;
+        const afecIva = getTagText(node, 'iAfecIVA', '');
+        const tasaIva = getTagText(node, 'dTasaIVA', '0');
+        const basExe = parseFloat(getTagText(node, 'dBasExe', '0') || '0');
+        const exenta = (afecIva === '3' || afecIva === '2' || tasaIva === '0' || basExe > 0) ? fmtNum(totOpe, curr) : '0';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${code}</td>
+          <td class="font-bold">${desc}</td>
+          <td>${unit}</td>
+          <td class="text-right font-mono">${qty}</td>
+          <td class="text-right font-mono">${price}</td>
+          <td class="text-right font-mono">${descItem}</td>
+          <td class="text-right font-mono">${exenta}</td>
+          <td class="text-right font-mono font-bold">${fmtNum(totOpe, curr)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const totGralRaw = getTagText(gTotSub, 'dTotGralOpe') || getTagText(gTotSub, 'dTotOpe') || fallbackTotal;
+      document.getElementById('p_sub_exe').textContent = fmtNum(getTagText(gTotSub, 'dSubExe', '0'), curr);
+      document.getElementById('p_sub_5').textContent = fmtNum(getTagText(gTotSub, 'dSub5', '0'), curr);
+      document.getElementById('p_sub_10').textContent = fmtNum(getTagText(gTotSub, 'dSub10', '0'), curr);
+      document.getElementById('p_tot_desc').textContent = `${fmtNum(getTagText(gTotSub, 'dTotDesc', '0'), curr)} ${curr}`;
+      document.getElementById('p_iva_5').textContent = fmtNum(getTagText(gTotSub, 'dIVA5', '0'), curr);
+      document.getElementById('p_iva_10').textContent = fmtNum(getTagText(gTotSub, 'dIVA10', '0'), curr);
+      document.getElementById('p_tot_iva').textContent = `${fmtNum(getTagText(gTotSub, 'dTotIVA', '0'), curr)} ${curr}`;
+      document.getElementById('p_curr_label').textContent = curr;
+      document.getElementById('p_tot_gral').textContent = `${fmtNum(totGralRaw, curr)} ${curr}`;
+
+      document.getElementById('p_cdc_formatted').textContent = cdc ? cdc.replace(/(.{4})/g, '$1 ').trim() : '—';
+
+      const qrUrl = getTagText(xmlDoc, 'dCarQR', '') || (cdc ? `https://ekuatia.set.gov.py/consultas/qr?nVersion=150&Id=${cdc}` : '');
+      const qrBox = document.getElementById('p_qr_box');
+      qrBox.innerHTML = '';
+      if (qrUrl && typeof QRCode !== 'undefined') {
+        new QRCode(qrBox, { text: qrUrl, width: 82, height: 82, correctLevel: QRCode.CorrectLevel.M });
+      }
+
+      document.getElementById('emptyState').classList.add('hidden');
+      document.getElementById('kudeSheet').classList.remove('hidden');
+      document.getElementById('topConvertBtn').disabled = false;
+      document.getElementById('topFileBadge').textContent = fileName;
+      showStatus('XML file successfully load ho gayi hai!', 'success');
+      return true;
+    }
+
+    document.getElementById('xmlFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById('selectedFileName').textContent = file.name;
+      const text = await file.text();
+      renderXmlPreview(text, file.name);
+    });
+
+    function downloadPdf() {
+      const element = document.getElementById('kudeSheet');
+      const opt = {
+        margin: 10,
+        filename: currentFileName.replace(/\.xml$/i, '') + '_KuDE.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().from(element).set(opt).save();
+    }
+
+    function loadSampleXml() {
+      const sample = `<?xml version="1.0" encoding="UTF-8"?>
+<rDE xmlns="http://ekuatia.set.gov.py/sifen/xsd">
+  <dVerFor>150</dVerFor>
+  <DE Id="01800249283001001692729622026090918510005828">
+    <dFecFirma>2026-09-09T23:51:08</dFecFirma>
+    <gTimb>
+      <dDesTiDE>Factura electrónica</dDesTiDE>
+      <dNumTim>15543208</dNumTim>
+      <dEst>001</dEst>
+      <dPunExp>001</dPunExp>
+      <dNumDoc>6927296</dNumDoc>
+      <dFeIniT>2022-04-04</dFeIniT>
+    </gTimb>
+    <gDatGralOpe>
+      <dFeEmiDE>2026-09-09T00:00:01</dFeEmiDE>
+      <gOpeCom>
+        <dDesTipTra>Prestación de servicios</dDesTipTra>
+        <cMoneOpe>PYG</cMoneOpe>
+        <dDesMoneOpe>Guarani</dDesMoneOpe>
+      </gOpeCom>
+      <gEmis>
+        <dRucEm>80024928</dRucEm>
+        <dDVEmi>3</dDVEmi>
+        <dNomEmi>CAMBIOS CHACO S.A.</dNomEmi>
+        <dDirEmi>AVDA. ESPAÑA N° 1234</dDirEmi>
+        <dDesCiuEmi>ASUNCION (DISTRITO)</dDesCiuEmi>
+        <dTelEmi>(021) 219-0000</dTelEmi>
+        <dEmailE>facturacion@cambioschaco.com.py</dEmailE>
+        <dDesActEco>CASAS DE CAMBIO</dDesActEco>
+      </gEmis>
+      <gDatRec>
+        <dNomRec>CLIENTE OPERACION DIVISAS</dNomRec>
+        <dNumIDRec>4589210</dNumIDRec>
+        <dDirRec>ASUNCION - PARAGUAY</dDirRec>
+      </gDatRec>
+    </gDatGralOpe>
+    <gDtipDE>
+      <gCamCond>
+        <dDCondOpe>Contado</dDCondOpe>
+        <gPaConEIni>
+          <dDesTiPag>Efectivo</dDesTiPag>
+        </gPaConEIni>
+      </gCamCond>
+      <gCamItem>
+        <dCodInt>388</dCodInt>
+        <dDesProSer>Compra de Divisas USD 258.-</dDesProSer>
+        <dDesUniMed>UNI</dDesUniMed>
+        <dCantProSer>1</dCantProSer>
+        <gValorItem>
+          <dPUniProSer>1501560</dPUniProSer>
+          <dTotBruOpeItem>1501560</dTotBruOpeItem>
+          <gValorRestaItem>
+            <dDescItem>0</dDescItem>
+            <dTotOpeItem>1501560</dTotOpeItem>
+          </gValorRestaItem>
+        </gValorItem>
+        <gCamIVA>
+          <iAfecIVA>3</iAfecIVA>
+          <dDesAfecIVA>Exento</dDesAfecIVA>
+          <dTasaIVA>0</dTasaIVA>
+          <dBasExe>1501560</dBasExe>
+        </gCamIVA>
+      </gCamItem>
+    </gDtipDE>
+    <gTotSub>
+      <dSubExe>1501560</dSubExe>
+      <dSub5>0</dSub5>
+      <dSub10>0</dSub10>
+      <dTotOpe>1501560</dTotOpe>
+      <dTotDesc>0</dTotDesc>
+      <dTotGralOpe>1501560</dTotGralOpe>
+      <dIVA5>0</dIVA5>
+      <dIVA10>0</dIVA10>
+      <dTotIVA>0</dTotIVA>
+    </gTotSub>
+  </DE>
+  <gCamFuFD>
+    <dCarQR>https://ekuatia.set.gov.py/consultas/qr?nVersion=150&amp;Id=01800249283001001692729622026090918510005828</dCarQR>
+  </gCamFuFD>
+</rDE>`;
+      document.getElementById('selectedFileName').textContent = 'Sample_Invoice.xml';
+      renderXmlPreview(sample, 'Sample_Invoice.xml');
+    }
+  </script>
+</body>
+</html>

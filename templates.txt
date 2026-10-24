@@ -1,0 +1,5 @@
+ekuatia_app/
+├── app.py
+└── templates/
+    ├── index.html
+    └── kude_pdf.html
