@@ -1,1 +1,595 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>e-Kuatia Multi-CDC to Auto PDF Downloader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    @media print {
+      body { background: #fff !important; }
+      .no-print { display: none !important; }
+      #previewWrapper { padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+      #kudeSheet { box-shadow: none !important; border: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 8mm !important; }
+    }
+    .kude-table th { background: #0f172a; color: #fff; font-size: 10px; text-transform: uppercase; padding: 7px 6px; border: 1px solid #0f172a; }
+    .kude-table td { font-size: 10.5px; padding: 7px 6px; border: 1px solid #cbd5e1; color: #0f172a; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- APP LOCK SCREEN OVERLAY -->
+  <div id="lockScreen" class="fixed inset-0 bg-slate-950/95 z-50 flex items-center justify-center hidden">
+    <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-sm w-full space-y-4 text-center shadow-2xl">
+      <div class="w-12 h-12 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center mx-auto font-bold text-lg border border-red-500/30">🔒</div>
+      <h2 class="text-base font-bold text-white">App Locked (30 Days Timeout Reached)</h2>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Please Pay the Subscription to Use the App (Contact <strong>+917017368107</strong>):
+      </p>
+      <input id="lockPasswordInput" type="password" maxlength="4"
+        placeholder="Enter 4-digit time..."
+        onkeydown="if(event.key==='Enter') checkUnlockPassword()"
+        class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-lg px-3 py-3 text-center text-xl font-mono text-white tracking-widest outline-none" />
+      <button onclick="checkUnlockPassword()"
+        class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs transition cursor-pointer shadow-lg">
+        🔓 Unlock App
+      </button>
+      <div id="lockErrorMsg" class="text-xs text-red-400 font-semibold hidden">Pay First And Get Code.</div>
+    </div>
+  </div>
+
+  <header class="no-print bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow">
+        PDF
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-white leading-tight">e-Kuatia Multi-CDC → Automatic XML to PDF (One by One)</h1>
+        <p id="uptimeDisplay" class="text-xs text-blue-400 font-mono mt-0.5">⏱ Loading active time...</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span id="topFileBadge" class="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-mono">
+        Ready
+      </span>
+      <button onclick="downloadPdfFromServer()" id="topConvertBtn" disabled
+        class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow transition flex items-center gap-2 cursor-pointer">
+        <span>⬇ Download PDF Again</span>
+      </button>
+      <button onclick="window.print()" id="topPrintBtn" disabled
+        class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed border border-slate-700 text-slate-200 text-xs font-semibold px-3.5 py-2.5 rounded-lg transition cursor-pointer">
+        🖨 Print
+      </button>
+    </div>
+  </header>
+
+  <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+
+    <aside class="no-print lg:col-span-4 bg-slate-900/90 border-r border-slate-800 p-5 space-y-5 overflow-y-auto">
+
+      <div class="bg-slate-950 border-2 border-blue-500/50 rounded-xl p-4 space-y-3.5 shadow-xl">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-blue-400">1. Multi-CDC Batch (Max 20)</span>
+          <span id="cdcCountBadge" class="text-[11px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 font-semibold">1 CDC</span>
+        </div>
+
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Yahan ek ya ek se zyada <strong>44-digit CDC numbers</strong> daalein (har line par ek ya comma se separated). Yeh unhe <strong>one by one</strong> fetch karega:
+        </p>
+
+        <div>
+          <label class="block text-[11px] text-slate-300 font-semibold mb-1">CDC Numbers List (Limit: Max 20):</label>
+          <textarea id="cdcInput" rows="5"
+            placeholder="01800249283001001692729622026090918510005828&#10;Yahan doosra CDC daalein..."
+            oninput="updateCdcCount()"
+            class="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-lg px-3 py-2.5 text-xs font-mono text-white outline-none resize-y">01800249283001001692729622026090918510005828</textarea>
+        </div>
+
+        <button onclick="fetchBatchFromEkuatia()" id="btnFetchEkuatia"
+          class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-3 rounded-lg text-xs shadow-lg transition cursor-pointer flex items-center justify-center gap-2">
+          <span>🚀 Start Multi-CDC One-by-One Fetch</span>
+        </button>
+      </div>
+
+      <div id="statusBox" class="hidden rounded-xl p-3.5 text-xs border leading-relaxed"></div>
+
+      <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">2. Local XML File to PDF (Optional)</span>
+          <span class="text-[11px] bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/20">Offline</span>
+        </div>
+
+        <label for="xmlFileInput"
+          class="block border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-xl p-3.5 text-center cursor-pointer transition bg-slate-900/60">
+          <div class="text-emerald-400 text-xs font-semibold">Agar XML pehle se hai to yahan select karein</div>
+          <div id="selectedFileName" class="text-[11px] text-slate-400 mt-1 font-mono truncate">Koi file select nahi hai (.xml)</div>
+          <input id="xmlFileInput" type="file" accept=".xml,text/xml,application/xml" class="hidden" />
+        </label>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="downloadPdfFromServer()" id="btnConvert" disabled
+            class="col-span-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 px-3 rounded-lg text-xs shadow transition cursor-pointer">
+            ⬇ Convert Local XML to PDF
+          </button>
+        </div>
+      </div>
+
+    </aside>
+
+    <main id="previewWrapper" class="lg:col-span-8 bg-slate-950 p-6 overflow-y-auto flex flex-col items-center">
+
+      <div id="emptyState" class="my-auto text-center max-w-md p-8 border border-slate-800 rounded-2xl bg-slate-900/50">
+        <div class="w-14 h-14 rounded-2xl bg-slate-800 text-blue-400 flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+          PDF
+        </div>
+        <h2 class="text-base font-bold text-white">CDC Numbers Daalein aur Batch Start Karein</h2>
+        <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+          Multi-CDC batch chalne par har ek invoice ka preview yahan dikhega aur PDF automatic download hoti jayegi.
+        </p>
+      </div>
+
+      <div id="kudeSheet" class="hidden w-full max-w-[210mm] bg-white text-slate-900 rounded-lg shadow-2xl p-7 space-y-3.5 border border-slate-300">
+
+        <div class="flex justify-between border-2 border-slate-800 rounded-lg p-3.5">
+          <div class="w-[58%] pr-3 space-y-1">
+            <div id="p_emi_name" class="text-base font-extrabold text-slate-900 uppercase">—</div>
+            <div class="text-xs text-slate-700"><strong>Actividad:</strong> <span id="p_emi_act">—</span></div>
+            <div class="text-xs text-slate-700"><strong>Dirección:</strong> <span id="p_emi_dir">—</span></div>
+            <div class="text-xs text-slate-700"><strong>Teléfono:</strong> <span id="p_emi_tel">—</span> | <strong>Email:</strong> <span id="p_emi_email">—</span></div>
+          </div>
+          <div class="w-[40%] border-l-2 border-slate-300 pl-4 text-right space-y-1">
+            <div id="p_doc_type" class="inline-block bg-slate-900 text-white font-bold text-xs px-3 py-1 rounded uppercase">FACTURA ELECTRÓNICA</div>
+            <div class="text-xs text-slate-800"><strong>RUC:</strong> <span id="p_emi_ruc">—</span></div>
+            <div class="text-xs text-slate-800"><strong>Timbrado N°:</strong> <span id="p_timbrado">—</span></div>
+            <div class="text-xs text-slate-800"><strong>Inicio Vigencia:</strong> <span id="p_fe_ini_t">—</span></div>
+            <div class="text-sm font-extrabold text-blue-700 pt-0.5">N° <span id="p_invoice_no">—</span></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="border border-slate-300 rounded-lg p-3 bg-slate-50 space-y-1">
+            <div class="text-[10px] font-bold uppercase text-slate-500 border-b border-slate-200 pb-1 mb-1">Datos del Receptor (Cliente)</div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">Nombre / Razón:</strong> <span id="p_rec_name" class="font-bold text-slate-900">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">RUC / Doc. ID:</strong> <span id="p_rec_doc">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">Dirección:</strong> <span id="p_rec_dir">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-28">Tel / Email:</strong> <span id="p_rec_contact">—</span></div>
+          </div>
+
+          <div class="border border-slate-300 rounded-lg p-3 bg-slate-50 space-y-1">
+            <div class="text-[10px] font-bold uppercase text-slate-500 border-b border-slate-200 pb-1 mb-1">Condiciones de la Operación</div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Fecha de Emisión:</strong> <span id="p_fe_emi">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Condición Venta:</strong> <span id="p_cond_ope">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Moneda:</strong> <span id="p_currency">—</span></div>
+            <div class="text-xs"><strong class="text-slate-600 inline-block w-32">Tipo Transacción:</strong> <span id="p_tip_tra">—</span></div>
+          </div>
+        </div>
+
+        <table class="w-full border-collapse kude-table">
+          <thead>
+            <tr>
+              <th class="text-left" style="width:8%">Cód.</th>
+              <th class="text-left" style="width:34%">Descripción Producto / Servicio</th>
+              <th class="text-left" style="width:7%">Unid.</th>
+              <th class="text-right" style="width:8%">Cant.</th>
+              <th class="text-right" style="width:12%">Precio Unit.</th>
+              <th class="text-right" style="width:9%">Desc.</th>
+              <th class="text-right" style="width:10%">Exentas</th>
+              <th class="text-right" style="width:12%">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody id="p_items_body"></tbody>
+        </table>
+
+        <div class="border-2 border-slate-800 rounded-lg overflow-hidden">
+          <div class="flex justify-between px-3.5 py-2 border-b border-slate-200 text-xs bg-slate-50">
+            <span><strong>Subtotales:</strong> Exentas: <span id="p_sub_exe">0</span> | Gravadas 5%: <span id="p_sub_5">0</span> | Gravadas 10%: <span id="p_sub_10">0</span></span>
+            <span><strong>Total Descuento:</strong> <span id="p_tot_desc">0</span></span>
+          </div>
+          <div class="flex justify-between px-3.5 py-2 border-b border-slate-200 text-xs bg-white">
+            <span><strong>Liquidación del IVA:</strong> (5%): <span id="p_iva_5">0</span> | (10%): <span id="p_iva_10">0</span> | <strong>Total IVA: <span id="p_tot_iva">0</span></strong></span>
+          </div>
+          <div class="flex justify-between px-4 py-2.5 bg-slate-900 text-white text-sm font-extrabold">
+            <span>TOTAL GENERAL DE LA OPERACIÓN (<span id="p_curr_label">PYG</span>)</span>
+            <span id="p_tot_gral">0 PYG</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between border border-slate-300 rounded-lg p-3.5 bg-slate-50">
+          <div class="flex-1 pr-4 space-y-1">
+            <div class="text-xs font-bold text-slate-800">KuDE - Representación Gráfica de Documento Electrónico (SIFEN / DNIT)</div>
+            <div class="text-[11px] text-slate-600">Consulte la validez de esta Factura Electrónica con el número de CDC en: <strong>https://ekuatia.set.gov.py/consultas/</strong></div>
+            <div class="text-[11px] font-bold text-slate-700 pt-1">CDC (Código de Control - 44 dígitos):</div>
+            <div id="p_cdc_formatted" class="font-mono text-xs font-bold tracking-wider bg-white border border-slate-300 px-3 py-1.5 rounded inline-block text-slate-900">—</div>
+          </div>
+          <div id="p_qr_box" class="w-24 h-24 bg-white border border-slate-300 rounded p-1.5 flex items-center justify-center shrink-0"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = (window.location.protocol === 'file:' || window.location.port !== '5000')
+      ? 'http://127.0.0.1:5000'
+      : '';
+
+    let currentXmlText = '';
+    let currentFileName = 'invoice.xml';
+    let firstRunDate = null;
+
+    // --- ACCURATE 30 DAYS LOCK TRACKER ---
+    async function initAppLockAndUptime() {
+      try {
+        const res = await fetch(`${API_BASE}/get-install-time`);
+        const data = await res.json();
+        if (!data.first_run) return;
+
+        firstRunDate = new Date(data.first_run);
+
+        setInterval(() => {
+          const now = new Date();
+          let diffMs = now - firstRunDate;
+          if (diffMs < 0) diffMs = 0;
+
+          const totalSeconds = Math.floor(diffMs / 1000);
+          const days = Math.floor(totalSeconds / (3600 * 24));
+          const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+
+          document.getElementById('uptimeDisplay').textContent = 
+            `⏱ Active Since First Run: ${days} days, ${hours} hrs, ${minutes} mins, ${seconds} secs`;
+
+          // Check if 30 days (30 * 24 * 3600 = 2,592,000 seconds) have passed
+          if (totalSeconds >= 30 * 24 * 3600) {
+            document.getElementById('lockScreen').classList.remove('hidden');
+            document.getElementById('lockPasswordInput').focus();
+          }
+        }, 1000);
+      } catch (err) {
+        document.getElementById('uptimeDisplay').textContent = '⏱ Uptime tracker active';
+      }
+    }
+
+    initAppLockAndUptime();
+
+    async function checkUnlockPassword() {
+      const inputVal = document.getElementById('lockPasswordInput').value.trim();
+
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      const parts = formatter.formatToParts(now);
+      let h = '', m = '';
+      for (let p of parts) {
+        if (p.type === 'hour') h = p.value;
+        if (p.type === 'minute') m = p.value;
+      }
+
+      const correctPassword = h + m;
+
+      if (inputVal === correctPassword) {
+        // Reset timer on backend so it gives another 30 days
+        try {
+          const res = await fetch(`${API_BASE}/reset-timer`, { method: 'POST' });
+          const data = await res.json();
+          if (data.new_run) {
+            firstRunDate = new Date(data.new_run);
+          }
+        } catch (e) {}
+
+        document.getElementById('lockScreen').classList.add('hidden');
+        document.getElementById('lockPasswordInput').value = '';
+        document.getElementById('lockErrorMsg').classList.add('hidden');
+      } else {
+        document.getElementById('lockErrorMsg').classList.remove('hidden');
+      }
+    }
+    // ----------------------------------------
+
+    function showStatus(msg, type = 'info') {
+      const box = document.getElementById('statusBox');
+      box.className = 'rounded-xl p-3.5 text-xs border leading-relaxed ';
+      if (type === 'error') {
+        box.className += 'bg-red-500/10 border-red-500/30 text-red-300';
+      } else if (type === 'success') {
+        box.className += 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
+      } else {
+        box.className += 'bg-amber-500/10 border-amber-500/30 text-amber-300';
+      }
+      box.textContent = msg;
+      box.classList.remove('hidden');
+    }
+
+    function updateCdcCount() {
+      const text = document.getElementById('cdcInput').value;
+      const lines = text.split(/[\r\n,]+/).map(s => s.replace(/\D/g, '')).filter(s => s.length === 44);
+      const badge = document.getElementById('cdcCountBadge');
+      badge.textContent = `${lines.length} CDC${lines.length > 1 ? 's' : ''}`;
+    }
+
+    function getTagText(parent, tagName, def = '') {
+      if (!parent) return def;
+      const els = parent.getElementsByTagName('*');
+      for (let i = 0; i < els.length; i++) {
+        const local = els[i].localName || els[i].tagName.split(':').pop();
+        if (local === tagName && els[i].textContent && els[i].textContent.trim() !== '') {
+          return els[i].textContent.trim();
+        }
+      }
+      return def;
+    }
+
+    function getBlock(root, tagName) {
+      const els = root.getElementsByTagName('*');
+      for (let i = 0; i < els.length; i++) {
+        const local = els[i].localName || els[i].tagName.split(':').pop();
+        if (local === tagName) return els[i];
+      }
+      return null;
+    }
+
+    function fmtNum(val, curr = 'PYG') {
+      if (val === null || val === undefined || String(val).trim() === '') return '0';
+      const n = parseFloat(String(val).trim());
+      if (isNaN(n)) return String(val);
+      if (curr === 'PYG' || Number.isInteger(n)) {
+        return Math.round(n).toLocaleString('es-PY');
+      }
+      return n.toLocaleString('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderXmlPreview(xmlString, fileName = 'document.xml') {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+      if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+        return false;
+      }
+
+      currentXmlText = xmlString;
+      currentFileName = fileName;
+
+      const deNode = getBlock(xmlDoc, 'DE');
+      const cdc = deNode ? (deNode.getAttribute('Id') || '') : '';
+
+      const gTimb = getBlock(xmlDoc, 'gTimb');
+      const gDatGralOpe = getBlock(xmlDoc, 'gDatGralOpe');
+      const gOpeCom = getBlock(xmlDoc, 'gOpeCom');
+      const gEmis = getBlock(xmlDoc, 'gEmis');
+      const gDatRec = getBlock(xmlDoc, 'gDatRec');
+      const gCamCond = getBlock(xmlDoc, 'gCamCond');
+      const gTotSub = getBlock(xmlDoc, 'gTotSub');
+
+      const curr = getTagText(gOpeCom, 'cMoneOpe', 'PYG');
+      const currName = getTagText(gOpeCom, 'dDesMoneOpe', '');
+      const est = getTagText(gTimb, 'dEst', '001');
+      const pun = getTagText(gTimb, 'dPunExp', '001');
+      const numDoc = getTagText(gTimb, 'dNumDoc', '');
+
+      document.getElementById('p_emi_name').textContent = getTagText(gEmis, 'dNomEmi', '—');
+      document.getElementById('p_emi_act').textContent = getTagText(gEmis, 'dDesActEco', '—');
+      const dirEmi = getTagText(gEmis, 'dDirEmi', '—');
+      const ciuEmi = getTagText(gEmis, 'dDesCiuEmi', '');
+      document.getElementById('p_emi_dir').textContent = ciuEmi ? `${dirEmi} - ${ciuEmi}` : dirEmi;
+      document.getElementById('p_emi_tel').textContent = getTagText(gEmis, 'dTelEmi', '—');
+      document.getElementById('p_emi_email').textContent = getTagText(gEmis, 'dEmailE', '—');
+
+      document.getElementById('p_doc_type').textContent = getTagText(gTimb, 'dDesTiDE', 'Factura electrónica');
+      const rucEm = getTagText(gEmis, 'dRucEm', '');
+      const dvEmi = getTagText(gEmis, 'dDVEmi', '');
+      document.getElementById('p_emi_ruc').textContent = rucEm ? `${rucEm}-${dvEmi}` : '—';
+      document.getElementById('p_timbrado').textContent = getTagText(gTimb, 'dNumTim', '—');
+      document.getElementById('p_fe_ini_t').textContent = getTagText(gTimb, 'dFeIniT', '—');
+      document.getElementById('p_invoice_no').textContent = numDoc ? `${est}-${pun}-${numDoc}` : '—';
+
+      document.getElementById('p_rec_name').textContent = getTagText(gDatRec, 'dNomRec', 'Sin Nombre');
+      const rucRec = getTagText(gDatRec, 'dRucRec', '');
+      const dvRec = getTagText(gDatRec, 'dDVRec', '');
+      document.getElementById('p_rec_doc').textContent = rucRec ? `${rucRec}-${dvRec}` : getTagText(gDatRec, 'dNumIDRec', '—');
+      document.getElementById('p_rec_dir').textContent = getTagText(gDatRec, 'dDirRec', '—');
+      const telRec = getTagText(gDatRec, 'dTelRec', '—');
+      const emailRec = getTagText(gDatRec, 'dEmailRec', '');
+      document.getElementById('p_rec_contact').textContent = emailRec ? `${telRec} | ${emailRec}` : telRec;
+
+      document.getElementById('p_fe_emi').textContent = getTagText(gDatGralOpe, 'dFeEmiDE', '—').replace('T', ' ');
+      document.getElementById('p_cond_ope').textContent = `${getTagText(gCamCond, 'dDCondOpe', 'Contado')} (${getTagText(gCamCond, 'dDesTiPag', 'Efectivo')})`;
+      document.getElementById('p_currency').textContent = currName ? `${curr} - ${currName}` : curr;
+      document.getElementById('p_tip_tra').textContent = getTagText(gOpeCom, 'dDesTipTra', '—');
+
+      const tbody = document.getElementById('p_items_body');
+      tbody.innerHTML = '';
+      const allEls = xmlDoc.getElementsByTagName('*');
+      const itemNodes = [];
+      for (let i = 0; i < allEls.length; i++) {
+        const local = allEls[i].localName || allEls[i].tagName.split(':').pop();
+        if (local === 'gCamItem') itemNodes.push(allEls[i]);
+      }
+
+      let fallbackTotal = '0';
+      itemNodes.forEach((node, idx) => {
+        const code = getTagText(node, 'dCodInt', String(idx + 1));
+        const desc = getTagText(node, 'dDesProSer', '—');
+        const unit = getTagText(node, 'dDesUniMed', 'UNI');
+        const qty = fmtNum(getTagText(node, 'dCantProSer', '1'), 'DEC');
+        const price = fmtNum(getTagText(node, 'dPUniProSer', '0'), curr);
+        const descItem = fmtNum(getTagText(node, 'dDescItem', '0'), curr);
+        const totOpe = getTagText(node, 'dTotOpeItem') || getTagText(node, 'dTotBruOpeItem', '0');
+        fallbackTotal = totOpe;
+        const afecIva = getTagText(node, 'iAfecIVA', '');
+        const tasaIva = getTagText(node, 'dTasaIVA', '0');
+        const basExe = parseFloat(getTagText(node, 'dBasExe', '0') || '0');
+        const exenta = (afecIva === '3' || afecIva === '2' || tasaIva === '0' || basExe > 0) ? fmtNum(totOpe, curr) : '0';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${code}</td>
+          <td class="font-bold">${desc}</td>
+          <td>${unit}</td>
+          <td class="text-right font-mono">${qty}</td>
+          <td class="text-right font-mono">${price}</td>
+          <td class="text-right font-mono">${descItem}</td>
+          <td class="text-right font-mono">${exenta}</td>
+          <td class="text-right font-mono font-bold">${fmtNum(totOpe, curr)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const totGralRaw = getTagText(gTotSub, 'dTotGralOpe') || getTagText(gTotSub, 'dTotOpe') || fallbackTotal;
+      document.getElementById('p_sub_exe').textContent = fmtNum(getTagText(gTotSub, 'dSubExe', '0'), curr);
+      document.getElementById('p_sub_5').textContent = fmtNum(getTagText(gTotSub, 'dSub5', '0'), curr);
+      document.getElementById('p_sub_10').textContent = fmtNum(getTagText(gTotSub, 'dSub10', '0'), curr);
+      document.getElementById('p_tot_desc').textContent = `${fmtNum(getTagText(gTotSub, 'dTotDesc', '0'), curr)} ${curr}`;
+      document.getElementById('p_iva_5').textContent = fmtNum(getTagText(gTotSub, 'dIVA5', '0'), curr);
+      document.getElementById('p_iva_10').textContent = fmtNum(getTagText(gTotSub, 'dIVA10', '0'), curr);
+      document.getElementById('p_tot_iva').textContent = `${fmtNum(getTagText(gTotSub, 'dTotIVA', '0'), curr)} ${curr}`;
+      document.getElementById('p_curr_label').textContent = curr;
+      document.getElementById('p_tot_gral').textContent = `${fmtNum(totGralRaw, curr)} ${curr}`;
+
+      const formattedCdc = cdc ? cdc.replace(/(.{4})/g, '$1 ').trim() : '—';
+      document.getElementById('p_cdc_formatted').textContent = formattedCdc;
+
+      const qrUrl = getTagText(xmlDoc, 'dCarQR', '') || (cdc ? `https://ekuatia.set.gov.py/consultas/qr?nVersion=150&Id=${cdc}` : '');
+      const qrBox = document.getElementById('p_qr_box');
+      qrBox.innerHTML = '';
+      if (qrUrl && typeof QRCode !== 'undefined') {
+        new QRCode(qrBox, { text: qrUrl, width: 82, height: 82, correctLevel: QRCode.CorrectLevel.M });
+      }
+
+      document.getElementById('emptyState').classList.add('hidden');
+      document.getElementById('kudeSheet').classList.remove('hidden');
+      document.getElementById('btnConvert').disabled = false;
+      document.getElementById('topConvertBtn').disabled = false;
+      document.getElementById('topPrintBtn').disabled = false;
+      document.getElementById('topFileBadge').textContent = fileName;
+
+      return true;
+    }
+
+    document.getElementById('xmlFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById('selectedFileName').textContent = file.name;
+      const text = await file.text();
+      if (renderXmlPreview(text, file.name)) {
+        await downloadPdfFromServer();
+      }
+    });
+
+    async function downloadPdfFromServer() {
+      if (!currentXmlText) return;
+      const btn1 = document.getElementById('btnConvert');
+      const btn2 = document.getElementById('topConvertBtn');
+      btn1.disabled = true;
+      btn2.disabled = true;
+      showStatus('PDF generate ho rahi hai...', 'info');
+
+      try {
+        const blobData = new Blob([currentXmlText], { type: 'text/xml' });
+        const fd = new FormData();
+        fd.append('file', blobData, currentFileName);
+
+        const res = await fetch(`${API_BASE}/convert-xml`, { method: 'POST', body: fd });
+        if (!res.ok) {
+          const err = await res.json();
+          showStatus(err.error || 'PDF conversion me error aaya.', 'error');
+          return;
+        }
+
+        const pdfBlob = await res.blob();
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentFileName.replace(/\.xml$/i, '') + '_KuDE.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showStatus('Success! KuDE Invoice PDF download ho gayi hai.', 'success');
+      } catch (err) {
+        showStatus('Server error: ' + err.message, 'error');
+      } finally {
+        btn1.disabled = false;
+        btn2.disabled = false;
+      }
+    }
+
+    async function fetchBatchFromEkuatia() {
+      const rawText = document.getElementById('cdcInput').value;
+      const cdcs = rawText.split(/[\r\n,]+/).map(s => s.replace(/\D/g, '')).filter(s => s.length === 44);
+
+      if (cdcs.length === 0) {
+        showStatus('Kripya kam se kam ek sahi 44-digit CDC number enter karein!', 'error');
+        return;
+      }
+
+      if (cdcs.length > 20) {
+        showStatus(`Aapne ${cdcs.length} CDCs enter kiye hain. Maximum limit 20 CDCs ki hai!`, 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btnFetchEkuatia');
+      btn.disabled = true;
+      btn.classList.add('opacity-60');
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < cdcs.length; i++) {
+        const cdc = cdcs[i];
+        showStatus(`[${i + 1}/${cdcs.length}] Fetching CDC: ${cdc}...`, 'info');
+
+        try {
+          const res = await fetch(`${API_BASE}/fetch-ekuatia`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cdc })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.xml_text) {
+            failCount++;
+            continue;
+          }
+
+          successCount++;
+          renderXmlPreview(data.xml_text, `${cdc}.xml`);
+
+          if (data.pdf_base64) {
+            const byteChars = atob(data.pdf_base64);
+            const byteNumbers = new Array(byteChars.length);
+            for (let j = 0; j < byteChars.length; j++) {
+              byteNumbers[j] = byteChars.charCodeAt(j);
+            }
+            const pdfBlob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/pdf' });
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.pdf_filename || `KuDE_${cdc}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+
+          await new Promise(r => setTimeout(r, 1500));
+
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      showStatus(`Batch Complete! Total: ${cdcs.length} | Success: ${successCount} | Failed: ${failCount}`, successCount > 0 ? 'success' : 'error');
+      btn.disabled = false;
+      btn.classList.remove('opacity-60');
+    }
+
+    updateCdcCount();
+  </script>
+</body>
+</html>
